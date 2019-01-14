@@ -16,6 +16,6 @@ if __name__=='__main__':
     now = time.strftime('%Y-%m-%d %H_%M_%S')    #获取当前时间并转化成 2018-12-11 00:58:00的格式
     filename = './report/' + now + '_result.html'
     fp = open(filename,'wb')
-    runner = HTMLTestRunner(stream=fp,title='Guest Manage System Interface Test Report',description='Implementation Example wigh:')
+    runner = HTMLTestRunner(stream=fp,title='Some Test Report',description='Implementation Example wigh:')
     runner.run(discover)
     fp.close()

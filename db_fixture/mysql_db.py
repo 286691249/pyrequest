@@ -1,7 +1,6 @@
 #!/usr/bin/python3.6
 #_*_coding:utf-8_*_
-from pymysql import connect,cursors
-from pymysql.err import OperationalError
+import pymysql
 import os
 import configparser as cparser
 
@@ -10,70 +9,102 @@ base_dir = str(os.path.dirname(os.path.dirname(__file__)))
 base_dir = base_dir.replace('\\','/')
 file_path = base_dir + '/db_config.ini'
 
-cf = cparser.ConfigParser()
-cf.read(file_path)
 
-host = cf.get('mysqlconf','host')
-port = cf.get('mysqlconf','port')
-db = cf.get('mysqlconf','db_name')
-user = cf.get('mysqlconf','user')
-password = cf.get('mysqlconf','password')
 
 #==============封装MySQL基本操作=============#
-class DB:
-    def __init__(self):
+class MysqldbHelper(object):
+
+    cf = cparser.ConfigParser()
+    cf.read(file_path)
+    host_name = cf.get('mysqlconf','host')
+    port_name = int(cf.get('mysqlconf', 'port'))
+    database_name = cf.get('mysqlconf', 'db_name')
+    username_name = cf.get('mysqlconf', 'user')
+    password_name = cf.get('mysqlconf', 'password')
+
+    def __init__(self, host=host_name, username=username_name, password=password_name, port=port_name,
+                 database=database_name):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.database = database
+        self.port = port
+        self.con = None
+        self.cur = None
+
         try:
-            #连接数据库
-            self.conn = connect(host=host,
-                                user=user,
-                                password=password,
-                                db=db,
-                                charset='utf8mb4',
-                                cursorclass=cursors.DictCursor)
-        except OperationalError as e:
-            print("Mysql Error %d: %s" % (e.args[0], e.args[1]))
+            self.con = pymysql.connect(host=self.host, user=self.username, passwd=self.password, port=self.port,
+                                       db=self.database,charset='utf8')
+            # 所有的查询，都在连接 con 的一个模块 cursor 上面运行的
+            self.cur = self.con.cursor()
+        except:
+            raise Exception("DataBase connect error,please check the db config.")
 
-    #清除表数据
-    def clear(self, table_name):
-        # real_sql = 'truncate table' + table_name +';'
-        real_sql = 'delete from ' + table_name +';'
-        with self.conn.cursor() as cursor:
-            cursor.execute('SET FOREIGN_KEY_CHECKS=0;')
-            cursor.execute(real_sql)
-        self.conn.commit()
-
-    #插入表数据
-    def insert(self, table_name, table_data):
-        _key = str()
-        for key in table_data:
-            table_data[key] = "'"+str(table_data[key])+"'"
-            key = '`'+key+'`'+ ","
-            _key += key
-        # key = ','.join(table_data.keys())
-        value = ','.join(table_data.values())
-        real_sql = "INSERT INTO" + ' ' + table_name +' '+ "("+ _key[:-1] +") VALUES ("+ value +")"
-        print(real_sql)
-        with self.conn.cursor() as cursor:
-            cursor.execute(real_sql)
-
-        self.conn.commit()
-
-    #关闭数据库链接
     def close(self):
-        self.conn.close()
+        """关闭数据库连接
 
-if __name__=='__main__':
-    db = DB()
-    table_name = "sign_event"
-    data = {
-        'id':12,
-        'name':'红米',
-        'limit':2000,
-        'status':1,
-        'address':'北京会展中心',
-        'start_time':'2018-12-11 00:49:25',
-        'create_time':'2018-12-11 00:49:25'
-    }
-    db.clear(table_name)
-    db.insert(table_name,data)
-    db.close()
+        """
+        if  self.con:
+            print('close')
+            self.con.close()
+        else:
+            raise Exception("DataBase doesn't connect,close connectiong error;please check the db config.")
+
+    def getVersion(self):
+        """获取数据库的版本号
+
+        """
+        self.cur.execute("SELECT VERSION()")
+        return self.getOneData()
+
+    '''
+    返回值：
+    1.返回值是元祖:表明查询到了结果
+    2.返回值是None：表明没有查询到结果
+    3.rtype:返回类型，如果etype=dict 以字典的形式返回查询到的数据，相反则以二维元祖的形式返回数据
+    4.type=all  返回全部结果，type=one 只返回第一条结果
+    '''
+
+    def executeSelect(self, sql='', args=(), type='all', rtype=''):
+        # 执行sql语句，针对读操作返回结果集
+        records=""
+        if rtype == 'dict':
+            self.cur = self.con.cursor(cursor=pymysql.cursors.DictCursor)
+        self.cur.execute(sql, args=args)
+        print('执行sql语句:', self.cur._last_executed)  # 打印sql语句
+        if type == 'one':
+            records = self.cur.fetchone()
+            print("records:", records)
+        else:
+            records = self.cur.fetchall()
+            print("records:",records)
+        return  records
+
+
+    '''
+    针对删改 等操作失败会自动回滚   
+    返回值:
+    1.None：表明已经执行成功
+    '''
+    def executeUpDe(self, sql='', args=()):
+        try:
+            self.cur.execute(sql, args)
+            print(self.cur._last_executed)  # 打印sql语句
+            self.con.commit()
+        except pymysql.Error as e:
+            self.con.rollback()
+            error = 'MySQL execute failed! ERROR (%s): %s' % (e.args[0], e.args[1])
+            print("error:", error)
+            raise Exception(error)
+
+
+    '''
+    针对insert 返回主键
+    '''
+    def executeInsert(self,sql='', args=()):
+        self.executeUpDe(sql,args)
+        return self.cur.lastrowid
+#
+#
+# if __name__ == '__main__':
+#     helper=MysqldbHelper()
