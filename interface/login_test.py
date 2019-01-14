@@ -111,3 +111,4 @@ class LoginTest(unittest.TestCase):
 
 if __name__=='__main__':
     LoginTest.main()
+    print('1')
