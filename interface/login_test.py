@@ -110,4 +110,4 @@ class LoginTest(unittest.TestCase):
         result=r.json()
 
 if __name__=='__main__':
-    pass
+    print('1')
